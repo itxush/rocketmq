@@ -20,6 +20,7 @@
  */
 package org.apache.rocketmq.common.protocol.header.namesrv;
 
+import org.apache.rocketmq.common.protocol.body.RegisterBrokerBody;
 import org.apache.rocketmq.remoting.CommandCustomHeader;
 import org.apache.rocketmq.remoting.annotation.CFNotNull;
 import org.apache.rocketmq.remoting.exception.RemotingCommandException;
@@ -31,13 +32,20 @@ public class RegisterBrokerRequestHeader implements CommandCustomHeader {
     private String brokerAddr;
     @CFNotNull
     private String clusterName;
+    /**
+     * master地址 主从架构 实现高可用需要
+     */
     @CFNotNull
     private String haServerAddr;
     @CFNotNull
     private Long brokerId;
-
+    /**
+     * 是否需要压缩 {@link RegisterBrokerBody}是否需要压缩后序列化
+     */
     private boolean compressed;
-
+    /**
+     * 将requestBody通过CRC32算法算出CRC值 用于在nameServer端校验数据的正确性
+     */
     private Integer bodyCrc32 = 0;
 
     public void checkFields() throws RemotingCommandException {
