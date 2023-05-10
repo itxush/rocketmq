@@ -68,7 +68,15 @@ import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
+    /**
+     * netty服务端的启动类
+     */
     private final ServerBootstrap serverBootstrap;
+    /**
+     * eventLoopGroupBoss与eventLoopGroupSelector线程组:这就是netty用来处理连接事件与读写事件的线程了，
+     * eventLoopGroupBoss对应的是netty的boss线程组
+     * eventLoopGroupSelector对应的是worker线程组
+     */
     private final EventLoopGroup eventLoopGroupSelector;
     private final EventLoopGroup eventLoopGroupBoss;
     private final NettyServerConfig nettyServerConfig;
@@ -108,6 +116,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             publicThreadNums = 4;
         }
 
+        // 创建 publicExecutor
         this.publicExecutor = Executors.newFixedThreadPool(publicThreadNums, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -117,7 +126,9 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
             }
         });
 
+        // 判断是否使用 epoll
         if (useEpoll()) {
+            // boss
             this.eventLoopGroupBoss = new EpollEventLoopGroup(1, new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -126,7 +137,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     return new Thread(r, String.format("NettyEPOLLBoss_%d", this.threadIndex.incrementAndGet()));
                 }
             });
-
+            // worker
             this.eventLoopGroupSelector = new EpollEventLoopGroup(nettyServerConfig.getServerSelectorThreads(), new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
                 private int threadTotal = nettyServerConfig.getServerSelectorThreads();
@@ -198,23 +209,36 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         prepareSharableHandlers();
 
         ServerBootstrap childHandler =
+                // 在 NettyRemotingServer#init 中准备的两个线程组
                 this.serverBootstrap.group(this.eventLoopGroupBoss, this.eventLoopGroupSelector)
                         .channel(useEpoll() ? EpollServerSocketChannel.class : NioServerSocketChannel.class)
                         .option(ChannelOption.SO_BACKLOG, nettyServerConfig.getServerSocketBacklog())
                         .option(ChannelOption.SO_REUSEADDR, true)
                         .option(ChannelOption.SO_KEEPALIVE, false)
                         .childOption(ChannelOption.TCP_NODELAY, true)
+                        // 绑定ip与端口
                         .localAddress(new InetSocketAddress(this.nettyServerConfig.getListenPort()))
                         .childHandler(new ChannelInitializer<SocketChannel>() {
                             @Override
                             public void initChannel(SocketChannel ch) throws Exception {
                                 ch.pipeline()
-                                        .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME, handshakeHandler)
+                                        .addLast(defaultEventExecutorGroup, HANDSHAKE_HANDLER_NAME, handshakeHandler) // handshakeHandler: 处理握手操作，用来判断tls的开启状态
                                         .addLast(defaultEventExecutorGroup,
+                                                // encoder/NettyDecoder：处理报文的编解码操作
                                                 encoder,
                                                 new NettyDecoder(),
+                                                /*
+                                                 * IdleStateHandler：处理心跳
+                                                 * readerIdleTimeSeconds: 一个状态为IdleState的IdleStateEvent。当在指定的时间段内没有执行读操作时，将触发READER_IDLE。指定0禁用。
+                                                 * writerIdleTimeSeconds: 一个状态为IdleState的IdleStateEvent。WRITER_IDLE将在指定的时间段内没有执行写操作时触发。指定0禁用。
+                                                 * allIdleTimeSeconds: 一个IdleStateEvent，其状态为IdleState。当在指定的时间段内没有进行读写操作时，将触发ALL_IDLE。指定0禁用。
+                                                 *
+                                                 * 这里使用allIdleTimeSeconds参数统一配置了读写心跳操作
+                                                 */
                                                 new IdleStateHandler(0, 0, nettyServerConfig.getServerChannelMaxIdleTimeSeconds()),
+                                                // connectionManageHandler：处理连接请求
                                                 connectionManageHandler,
+                                                // serverHandler：处理读写请求
                                                 serverHandler);
                             }
                         });

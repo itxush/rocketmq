@@ -148,11 +148,11 @@ public class BrokerController {
     private final BlockingQueue<Runnable> endTransactionThreadPoolQueue;
     private final FilterServerManager filterServerManager;
     private final BrokerStatsManager brokerStatsManager;
-    private final List<SendMessageHook> sendMessageHookList = new ArrayList<SendMessageHook>();
-    private final List<ConsumeMessageHook> consumeMessageHookList = new ArrayList<ConsumeMessageHook>();
+    private final List<SendMessageHook> sendMessageHookList = new ArrayList<>();
+    private final List<ConsumeMessageHook> consumeMessageHookList = new ArrayList<>();
     private final BrokerFastFailure brokerFastFailure;
     private final Configuration configuration;
-    private final Map<Class, AccessValidator> accessValidatorMap = new HashMap<Class, AccessValidator>();
+    private final Map<Class, AccessValidator> accessValidatorMap = new HashMap<>();
     private MessageStore messageStore;
     private RemotingServer remotingServer;
     private RemotingServer fastRemotingServer;
@@ -176,12 +176,10 @@ public class BrokerController {
     private AbstractTransactionalMessageCheckListener transactionalMessageCheckListener;
     private Future<?> slaveSyncFuture;
 
-    public BrokerController(
-            final BrokerConfig brokerConfig,
-            final NettyServerConfig nettyServerConfig,
-            final NettyClientConfig nettyClientConfig,
-            final MessageStoreConfig messageStoreConfig
-    ) {
+    public BrokerController(final BrokerConfig brokerConfig,
+                            final NettyServerConfig nettyServerConfig,
+                            final NettyClientConfig nettyClientConfig,
+                            final MessageStoreConfig messageStoreConfig) {
         this.brokerConfig = brokerConfig;
         this.nettyServerConfig = nettyServerConfig;
         this.nettyClientConfig = nettyClientConfig;

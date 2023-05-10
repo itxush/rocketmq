@@ -87,12 +87,14 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
 
 
         switch (request.getCode()) {
+            // 操作kv 配置信息
             case RequestCode.PUT_KV_CONFIG:
                 return this.putKVConfig(ctx, request);
             case RequestCode.GET_KV_CONFIG:
                 return this.getKVConfig(ctx, request);
             case RequestCode.DELETE_KV_CONFIG:
                 return this.deleteKVConfig(ctx, request);
+            // 查询broker版本信息
             case RequestCode.QUERY_DATA_VERSION:
                 return queryBrokerTopicConfig(ctx, request);
             // 如果是RequestCode.REGISTER_BROKER，进行broker注册
@@ -105,6 +107,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 }
             case RequestCode.UNREGISTER_BROKER:
                 return this.unregisterBroker(ctx, request);
+            // 根据topic获取路由信息
             case RequestCode.GET_ROUTEINFO_BY_TOPIC:
                 return this.getRouteInfoByTopic(ctx, request);
             case RequestCode.GET_BROKER_CLUSTER_INFO:
@@ -232,6 +235,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
             registerBrokerBody.getTopicConfigSerializeWrapper().getDataVersion().setTimestamp(0);
         }
 
+        // 处理注册
         RegisterBrokerResult result = this.namesrvController.getRouteInfoManager().registerBroker(
                 requestHeader.getClusterName(),
                 requestHeader.getBrokerAddr(),
@@ -274,8 +278,14 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 (QueryDataVersionRequestHeader) request.decodeCommandCustomHeader(QueryDataVersionRequestHeader.class);
         DataVersion dataVersion = DataVersion.decode(request.getBody(), DataVersion.class);
 
+        // 关键代码：判断版本是否发生变化
         Boolean changed = this.namesrvController.getRouteInfoManager().isBrokerTopicConfigChanged(requestHeader.getBrokerAddr(), dataVersion);
         if (!changed) {
+            /*
+             * 如果没改变，就更新最后一次的上报时间为当前时间
+             * 那么当DataVersion发生变化时，就不会更新BrokerLiveInfo#lastUpdateTimestamp的值了吗？并不是，
+             * 如果DataVersion发生了变化，就表明broker需要再次注册，BrokerLiveInfo#lastUpdateTimestamp会在注册请求里被改变了。
+             */
             this.namesrvController.getRouteInfoManager().updateBrokerInfoUpdateTimestamp(requestHeader.getBrokerAddr(), System.currentTimeMillis());
         }
 
@@ -283,6 +293,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         response.setCode(ResponseCode.SUCCESS);
         response.setRemark(null);
 
+        // 返回 nameServer当前的版本号
         if (nameSeverDataVersion != null) {
             response.setBody(nameSeverDataVersion.encode());
         }
@@ -352,20 +363,26 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
 
     public RemotingCommand getRouteInfoByTopic(ChannelHandlerContext ctx,
                                                RemotingCommand request) throws RemotingCommandException {
+        // 创建response
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 获取请求头
         final GetRouteInfoRequestHeader requestHeader =
                 (GetRouteInfoRequestHeader) request.decodeCommandCustomHeader(GetRouteInfoRequestHeader.class);
 
+        // 获取某个topic的路由信息
         TopicRouteData topicRouteData = this.namesrvController.getRouteInfoManager().pickupTopicRouteData(requestHeader.getTopic());
 
+        // topicRouteData不为null
         if (topicRouteData != null) {
+            // 是否支持顺序消费 默认false
             if (this.namesrvController.getNamesrvConfig().isOrderMessageEnable()) {
                 String orderTopicConf =
                         this.namesrvController.getKvConfigManager().getKVConfig(NamesrvUtil.NAMESPACE_ORDER_TOPIC_CONFIG,
                                 requestHeader.getTopic());
                 topicRouteData.setOrderTopicConf(orderTopicConf);
             }
-
+            // 组装响应并返回
+            // 序列化json
             byte[] content;
             Boolean standardJsonOnly = requestHeader.getAcceptStandardJsonOnly();
             if (request.getVersion() >= Version.V4_9_4.ordinal() || (null != standardJsonOnly && standardJsonOnly)) {
@@ -381,10 +398,9 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
             response.setRemark(null);
             return response;
         }
-
+        // 如果不存在 返回topic不存在code
         response.setCode(ResponseCode.TOPIC_NOT_EXIST);
-        response.setRemark("No topic route info in name server for the topic: " + requestHeader.getTopic()
-                + FAQUrl.suggestTodo(FAQUrl.APPLY_TOPIC_URL));
+        response.setRemark("No topic route info in name server for the topic: " + requestHeader.getTopic() + FAQUrl.suggestTodo(FAQUrl.APPLY_TOPIC_URL));
         return response;
     }
 

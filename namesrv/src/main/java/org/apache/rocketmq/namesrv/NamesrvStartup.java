@@ -19,12 +19,14 @@ package org.apache.rocketmq.namesrv;
 import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.joran.JoranConfigurator;
 import ch.qos.logback.core.joran.spi.JoranException;
+
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
@@ -74,7 +76,10 @@ public class NamesrvStartup {
         System.setProperty(RemotingCommand.REMOTING_VERSION_KEY, Integer.toString(MQVersion.CURRENT_VERSION));
         //PackageConflictDetect.detectFastjson();
 
-        // 构造org.apache.commons.cli.Options,并添加-h -n参数，-h参数是打印帮助信息，-n参数是指定namesrvAddr
+        /*
+         *  构造org.apache.commons.cli.Options,并添加-h -n参数，-h参数是打印帮助信息，-n参数是指定namesrvAddr
+         *  就是启动ns时 用户可能会在启动命令前添加参数
+         */
         Options options = ServerUtil.buildCommandlineOptions(new Options());
         // 初始化commandLine，并在options中添加-c -p参数，-c指定nameserver的配置文件路径，-p标识打印配置信息
         commandLine = ServerUtil.parseCmdLine("mqnamesrv", args, buildCommandlineOptions(options), new PosixParser());
@@ -88,13 +93,22 @@ public class NamesrvStartup {
         // netty服务器配置类，网络参数
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
-        // 命令带有-c参数，说明指定配置文件，需要根据配置文件路径读取配置文件内容，并将文件中配置信息赋值给NamesrvConfig和NettyServerConfig
+        /*
+         * 命令带有-c参数，说明指定配置文件，需要根据配置文件路径读取配置文件内容，并将文件中配置信息赋值给NamesrvConfig和NettyServerConfig
+         * 在启动项目中，可以使用 -c /xxx/xxx.conf指定配置文件的位置, 然后通过如下代码
+         *      InputStream in = new BufferedInputStream(new FileInputStream(file));
+         *      properties = new Properties();
+         *      properties.load(in);
+         * 将配置文件的内容加载到properties对象中，然后调用MixAll.properties2Object(properties, namesrvConfig)方法将properties的属性赋值给namesrvConfig
+         */
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
+                // 读取配置文件，并将其加载到 properties 中
                 InputStream in = new BufferedInputStream(new FileInputStream(file));
                 properties = new Properties();
                 properties.load(in);
+                // 将 properties 里的属性赋值到 namesrvConfig 与 nettyServerConfig
                 MixAll.properties2Object(properties, namesrvConfig);
                 MixAll.properties2Object(properties, nettyServerConfig);
 
@@ -112,9 +126,12 @@ public class NamesrvStartup {
             System.exit(0);
         }
 
+        // 将 commandLine 的所有配置设置到 namesrvConfig 中
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
 
+        // 检查环境变量：ROCKETMQ_HOME
         if (null == namesrvConfig.getRocketmqHome()) {
+            // 如果不设置 ROCKETMQ_HOME，就会在这里报错
             System.out.printf("Please set the %s variable in your environment to match the location of the RocketMQ installation%n", MixAll.ROCKETMQ_HOME_ENV);
             System.exit(-2);
         }
@@ -130,9 +147,11 @@ public class NamesrvStartup {
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
 
+        // 创建一个controller
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
+        // 将当前 properties 合并到项目的配置中，并且当前 properties 会覆盖项目中的配置
         controller.getConfiguration().registerConfig(properties);
 
         return controller;
@@ -143,18 +162,22 @@ public class NamesrvStartup {
         if (null == controller) {
             throw new IllegalArgumentException("NamesrvController is null");
         }
-
+        // 初始化
         boolean initResult = controller.initialize();
         if (!initResult) {
             controller.shutdown();
             System.exit(-3);
         }
-
+        /*
+         * 关闭钩子，可以在关闭前进行一些操作
+         * 添加关闭钩子，所谓的关闭钩子，可以理解为一个线程，可以用来监听jvm的关闭事件，在jvm真正关闭前，可以进行一些处理操作，
+         * 这里的关闭前的处理操作就是controller.shutdown()方法所做的事了，所做的事也很容易想到，无非就是关闭线程池、关闭已经打开的资源等
+         */
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, (Callable<Void>) () -> {
             controller.shutdown();
             return null;
         }));
-
+        // 启动
         controller.start();
 
         return controller;

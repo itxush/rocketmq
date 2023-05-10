@@ -56,6 +56,7 @@ public class RouteInfoManager {
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     /**
      * Topic消息队列路由信息，消息发送时根据路由表进行负载均衡
+     * 一个topic会在不同的broker上被创建
      */
     private final HashMap<String/* topic */, Map<String /* brokerName */ , QueueData>> topicQueueTable;
     /**
@@ -202,6 +203,7 @@ public class RouteInfoManager {
                 registerFirst = registerFirst || (null == oldAddr);
                 // 如过Broker是Master，并且Broker的Topic配置信息发生变化或者是首次注册，需要创建或更新Topic路由元数据，填充topicQueueTable
                 if (null != topicConfigWrapper && MixAll.MASTER_ID == brokerId) {
+                    // topic配置信息发生变化  或 初次注册
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion()) || registerFirst) {
                         ConcurrentMap<String, TopicConfig> tcTable = topicConfigWrapper.getTopicConfigTable();
                         if (tcTable != null) {
@@ -213,6 +215,7 @@ public class RouteInfoManager {
                     }
                 }
 
+                // 第四步 更新brokerLiveTable
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                         new BrokerLiveInfo(
                                 System.currentTimeMillis(),
@@ -438,6 +441,7 @@ public class RouteInfoManager {
         try {
             try {
                 this.lock.readLock().lockInterruptibly();
+                // 获取topic 获取queueData 列表
                 Map<String, QueueData> queueDataMap = this.topicQueueTable.get(topic);
                 if (queueDataMap != null) {
                     topicRouteData.setQueueDatas(new ArrayList<>(queueDataMap.values()));
@@ -448,8 +452,8 @@ public class RouteInfoManager {
                     for (String brokerName : brokerNameSet) {
                         BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                         if (null != brokerData) {
-                            BrokerData brokerDataClone = new BrokerData(brokerData.getCluster(), brokerData.getBrokerName(), (HashMap<Long, String>) brokerData
-                                    .getBrokerAddrs().clone());
+                            BrokerData brokerDataClone = new BrokerData(brokerData.getCluster(), brokerData.getBrokerName(),
+                                    (HashMap<Long, String>) brokerData.getBrokerAddrs().clone());
                             brokerDataList.add(brokerDataClone);
                             foundBrokerData = true;
 
@@ -776,7 +780,7 @@ class BrokerLiveInfo {
      */
     private Channel channel;
     /**
-     * master地址 初次请求的时候该值为空 slave想NameServer注册后返回
+     * master地址 初次请求的时候该值为空 slave向NameServer注册后返回
      */
     private String haServerAddr;
 

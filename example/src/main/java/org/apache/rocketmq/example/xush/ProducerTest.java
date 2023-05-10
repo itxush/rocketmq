@@ -11,6 +11,7 @@ public class ProducerTest {
         String topic = "test_hello_rocketmq";
         // 构建Producer实例
         DefaultMQProducer producer = new DefaultMQProducer();
+        // <1.2> 设置 RocketMQ Namesrv 地址
         producer.setNamesrvAddr(namesrvAddr);
         producer.setProducerGroup(group);
         // 启动producer

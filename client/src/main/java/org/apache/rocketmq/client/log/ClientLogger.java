@@ -63,6 +63,7 @@ public class ClientLogger {
 
     private static synchronized Appender createClientAppender() {
         String clientLogRoot = System.getProperty(CLIENT_LOG_ROOT, System.getProperty("user.home") + "/logs/rocketmqlogs");
+        // String clientLogRoot = System.getProperty(CLIENT_LOG_ROOT, "D:\\workspace\\xush\\rocketmq-ws\\logs\\rocketmqlogs");
         String clientLogMaxIndex = System.getProperty(CLIENT_LOG_MAXINDEX, "10");
         String clientLogFileName = System.getProperty(CLIENT_LOG_FILENAME, "rocketmq_client.log");
         String maxFileSize = System.getProperty(CLIENT_LOG_FILESIZE, "1073741824");

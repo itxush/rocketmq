@@ -80,8 +80,7 @@ public abstract class NettyRemotingAbstract {
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
      */
-    protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
-            new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
+    protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable = new HashMap<>(64);
 
     /**
      * Executor to feed netty events to user defined {@link ChannelEventListener}.
@@ -191,7 +190,9 @@ public abstract class NettyRemotingAbstract {
      * @param cmd request command.
      */
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
+        // 根据 code 从 processorTable 获取 Pair
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
+        // 找不到默认值
         final Pair<NettyRequestProcessor, ExecutorService> pair = null == matched ? this.defaultRequestProcessor : matched;
         final int opaque = cmd.getOpaque();
 
@@ -206,6 +207,7 @@ public abstract class NettyRemotingAbstract {
                             @Override
                             public void callback(RemotingCommand response) {
                                 doAfterRpcHooks(remoteAddr, cmd, response);
+                                // 不是 单向
                                 if (!cmd.isOnewayRPC()) {
                                     if (response != null) {
                                         response.setOpaque(opaque);
@@ -223,11 +225,14 @@ public abstract class NettyRemotingAbstract {
                                 }
                             }
                         };
+                        // 异步netty请求处理器
                         if (pair.getObject1() instanceof AsyncNettyRequestProcessor) {
                             AsyncNettyRequestProcessor processor = (AsyncNettyRequestProcessor) pair.getObject1();
                             processor.asyncProcessRequest(ctx, cmd, callback);
                         } else {
+                            // 不是 异步请求处理器 从 pair 中拿到 Processor 进行处理
                             NettyRequestProcessor processor = pair.getObject1();
+                            // TODO: 2023/5/9 处理请求
                             RemotingCommand response = processor.processRequest(ctx, cmd);
                             callback.callback(response);
                         }

@@ -67,6 +67,7 @@ public class Producer {
                 /*
                  * Create a message instance, specifying topic, tag and message body.
                  */
+                // <2.1> 创建 Message 消息
                 Message msg = new Message(TOPIC /* Topic */,
                     TAG /* Tag */,
                     ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET) /* Message body */
@@ -75,6 +76,7 @@ public class Producer {
                 /*
                  * Call send message to deliver message to one of brokers.
                  */
+                // <2.2> 同步发送消息
                 SendResult sendResult = producer.send(msg);
                 /*
                  * There are different ways to send message, if you don't care about the send result,you can use this way
@@ -109,7 +111,7 @@ public class Producer {
                  *
                  *}
                  */
-
+                // <2.3> 打印发送结果
                 System.out.printf("%s%n", sendResult);
             } catch (Exception e) {
                 e.printStackTrace();

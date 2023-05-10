@@ -327,14 +327,17 @@ public class MixAll {
                 try {
                     String tmp = mn.substring(4);
                     String first = mn.substring(3, 4);
-
+                    // 首字母小写
                     String key = first.toLowerCase() + tmp;
+                    // 从Properties中获取对应的值
                     String property = p.getProperty(key);
                     if (property != null) {
+                        // 获取值，并进行相应的类型转换
                         Class<?>[] pt = method.getParameterTypes();
                         if (pt != null && pt.length > 0) {
                             String cn = pt[0].getSimpleName();
                             Object arg = null;
+                            // 转换成int
                             if (cn.equals("int") || cn.equals("Integer")) {
                                 arg = Integer.parseInt(property);
                             } else if (cn.equals("long") || cn.equals("Long")) {
@@ -350,6 +353,7 @@ public class MixAll {
                             } else {
                                 continue;
                             }
+                            // 反射调用
                             method.invoke(object, arg);
                         }
                     }
