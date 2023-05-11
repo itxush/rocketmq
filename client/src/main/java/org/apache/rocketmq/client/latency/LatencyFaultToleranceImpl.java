@@ -25,24 +25,30 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.rocketmq.client.common.ThreadLocalIndex;
 
 public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> {
-    private final ConcurrentHashMap<String, FaultItem> faultItemTable = new ConcurrentHashMap<String, FaultItem>(16);
+    private final ConcurrentHashMap<String, FaultItem> faultItemTable = new ConcurrentHashMap<>(16);
 
     private final ThreadLocalIndex whichItemWorst = new ThreadLocalIndex();
 
     @Override
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
+        // 从缓存中获取
         FaultItem old = this.faultItemTable.get(name);
+        // 缓存没有的情况
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
+            // 设置延迟
             faultItem.setCurrentLatency(currentLatency);
+            // 设置启用时间
             faultItem.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
-
+            // 设置faultItemTable中
             old = this.faultItemTable.putIfAbsent(name, faultItem);
+            // 如果已经有了 拿到 老的进行更新 TODO 有趣 这也是一个解决资源安全问题的方法
             if (old != null) {
                 old.setCurrentLatency(currentLatency);
                 old.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
             }
         } else {
+            // 缓存中已经有了，直接拿老的进行更新
             old.setCurrentLatency(currentLatency);
             old.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
         }
@@ -64,18 +70,23 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     @Override
     public String pickOneAtLeast() {
+        // 将map中里面的放到tmpList 中
         final Enumeration<FaultItem> elements = this.faultItemTable.elements();
-        List<FaultItem> tmpList = new LinkedList<FaultItem>();
+        List<FaultItem> tmpList = new LinkedList<>();
         while (elements.hasMoreElements()) {
             final FaultItem faultItem = elements.nextElement();
             tmpList.add(faultItem);
         }
+
         if (!tmpList.isEmpty()) {
             Collections.sort(tmpList);
             final int half = tmpList.size() / 2;
+            // 没有 2台机器
             if (half <= 0) {
+                // 选择第一个
                 return tmpList.get(0).getName();
             } else {
+                // 有2台机器及以上，某个线程内随机选排在前半段的broker
                 final int i = this.whichItemWorst.incrementAndGet() % half;
                 return tmpList.get(i).getName();
             }
@@ -91,9 +102,16 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             '}';
     }
 
+    /**
+     * 失败条目（规避规则条目）
+     */
     class FaultItem implements Comparable<FaultItem> {
+        // 条目唯一键，这里是brokerName
         private final String name;
+        // currentLatency 和startTimestamp  被volatile修饰
+        // 本次消息发送的延迟时间
         private volatile long currentLatency;
+        // 故障规避的开始时间
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {
@@ -102,6 +120,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
         @Override
         public int compareTo(final FaultItem other) {
+            // 将能提供服务的放前面
             if (this.isAvailable() != other.isAvailable()) {
                 if (this.isAvailable())
                     return -1;
@@ -109,13 +128,13 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
                 if (other.isAvailable())
                     return 1;
             }
-
+            // 找延迟低的 放前面
             if (this.currentLatency < other.currentLatency)
                 return -1;
             else if (this.currentLatency > other.currentLatency) {
                 return 1;
             }
-
+            // 找最近能提供服务的  放前面
             if (this.startTimestamp < other.startTimestamp)
                 return -1;
             else if (this.startTimestamp > other.startTimestamp) {

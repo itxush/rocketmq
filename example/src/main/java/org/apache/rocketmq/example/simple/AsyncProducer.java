@@ -33,6 +33,7 @@ public class AsyncProducer {
         DefaultMQProducer producer = new DefaultMQProducer("Jodie_Daily_test");
         producer.start();
         producer.setRetryTimesWhenSendAsyncFailed(0);
+        // producer.setAsyncSenderExecutor()
 
         int messageCount = 100;
         final CountDownLatch countDownLatch = new CountDownLatch(messageCount);

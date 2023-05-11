@@ -58,6 +58,10 @@ import org.apache.rocketmq.remoting.exception.RemotingException;
  *
  * <p> <strong>Thread Safety:</strong> After configuring and starting process, this class can be regarded as thread-safe
  * and used among multiple threads context. </p>
+ * <p>
+ * 功能一：给消息生产者配置参数，调整参数就是调用这个类的api，比如上面我们设置nameserv地址producer.setNamesrvAddr("127.0.0.1:9876");可以把它看作一个配置类，
+ * 功能二：发送消息的功能，这里它发送消息都是调用defaultMQProducerImpl 这个类，
+ * 功能三：它实现MQAdmin 接口里面关于topic与MessageQueue的操作。
  */
 public class DefaultMQProducer extends ClientConfig implements MQProducer {
 
@@ -66,7 +70,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      */
     protected final transient DefaultMQProducerImpl defaultMQProducerImpl;
     private final InternalLogger log = ClientLogger.getLog();
-    private final Set<Integer> retryResponseCodes = new CopyOnWriteArraySet<Integer>(Arrays.asList(
+    private final Set<Integer> retryResponseCodes = new CopyOnWriteArraySet<>(Arrays.asList(
             ResponseCode.TOPIC_NOT_EXIST,
             ResponseCode.SERVICE_NOT_AVAILABLE,
             ResponseCode.SYSTEM_ERROR,
@@ -82,6 +86,8 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * For non-transactional messages, it does not matter as long as it's unique per process. </p>
      * <p>
      * See <a href="http://rocketmq.apache.org/docs/core-concept/">core concepts</a> for more discussion.
+     *
+     * 组信息，需要你自己指定
      */
     private String producerGroup;
 
@@ -91,17 +97,18 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     private String createTopicKey = TopicValidator.AUTO_CREATE_TOPIC_KEY_TOPIC;
 
     /**
-     * Number of queues to create per default topic.
+     * Number of queues to create per default topic. 就是新建一个topic 默认设置4个MessageQueue
      */
     private volatile int defaultTopicQueueNums = 4;
 
     /**
-     * Timeout for sending messages.
+     * Timeout for sending messages. 发送消息的超时时间 单位ms
      */
     private int sendMsgTimeout = 3000;
 
     /**
      * Compress message body threshold, namely, message body larger than 4k will be compressed on default.
+     * 这个就是当发送的消息内容大于这个数的时候 进行压缩，压缩阈值，默认是4k
      */
     private int compressMsgBodyOverHowmuch = 1024 * 4;
 
@@ -109,6 +116,8 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * Maximum number of retry to perform internally before claiming sending failure in synchronous mode. </p>
      * <p>
      * This may potentially cause message duplication which is up to application developers to resolve.
+     *
+     * 发送失败的时候重试次数 默认是2次
      */
     private int retryTimesWhenSendFailed = 2;
 
@@ -116,16 +125,21 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * Maximum number of retry to perform internally before claiming sending failure in asynchronous mode. </p>
      * <p>
      * This may potentially cause message duplication which is up to application developers to resolve.
+     *
+     * 异步发送失败的时候重试次数 默认是2次
      */
     private int retryTimesWhenSendAsyncFailed = 2;
 
     /**
      * Indicate whether to retry another broker on sending failure internally.
+     *
+     * 指示是否在内部发送失败时重试另一个broker
      */
     private boolean retryAnotherBrokerWhenNotStoreOK = false;
 
     /**
      * Maximum allowed message body size in bytes.
+     * 允许发送消息最大大小 默认是4m
      */
     private int maxMessageSize = 1024 * 1024 * 4; // 4M
 
@@ -279,7 +293,9 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
     @Override
     public void start() throws MQClientException {
         this.setProducerGroup(withNamespace(this.producerGroup));
+        // 调用 defaultMQProducerImpl 的 start() 方法
         this.defaultMQProducerImpl.start();
+        // 消息轨迹相关
         if (null != traceDispatcher) {
             try {
                 traceDispatcher.start(this.getNamesrvAddr(), this.getAccessChannel());
@@ -368,8 +384,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * @throws InterruptedException if the sending thread is interrupted.
      */
     @Override
-    public void send(Message msg,
-                     SendCallback sendCallback) throws MQClientException, RemotingException, InterruptedException {
+    public void send(Message msg, SendCallback sendCallback) throws MQClientException, RemotingException, InterruptedException {
         msg.setTopic(withNamespace(msg.getTopic()));
         this.defaultMQProducerImpl.send(msg, sendCallback);
     }

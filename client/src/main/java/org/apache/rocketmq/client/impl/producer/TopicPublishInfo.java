@@ -67,19 +67,23 @@ public class TopicPublishInfo {
     }
 
     public MessageQueue selectOneMessageQueue(final String lastBrokerName) {
+        // 消息第一次发送的时候 还没有重试 也没有上一个brokerName
         if (lastBrokerName == null) {
             return selectOneMessageQueue();
         } else {
+            // 这个 出现在重试的时候
             for (int i = 0; i < this.messageQueueList.size(); i++) {
                 int index = this.sendWhichQueue.incrementAndGet();
                 int pos = Math.abs(index) % this.messageQueueList.size();
                 if (pos < 0)
                     pos = 0;
                 MessageQueue mq = this.messageQueueList.get(pos);
+                // 避开 上次发送的brokerName
                 if (!mq.getBrokerName().equals(lastBrokerName)) {
                     return mq;
                 }
             }
+            // 到最后 没有避开  只能随机选一个
             return selectOneMessageQueue();
         }
     }

@@ -489,14 +489,20 @@ public class RouteInfoManager {
 
     public int scanNotActiveBroker() {
         int removeCount = 0;
+        // brokerLiveTable：存放活跃的broker，就是找出其中不活跃的，然后移除，操作的是 brokerLiveTable
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {
             Entry<String, BrokerLiveInfo> next = it.next();
+            // 上一次的心跳时间
             long last = next.getValue().getLastUpdateTimestamp();
+            // 根据心跳时间判断是否存活，超时时间为2min
             if ((last + BROKER_CHANNEL_EXPIRED_TIME) < System.currentTimeMillis()) { // 该broker超过120秒还没有ns发送心跳
+                // 关闭channel
                 RemotingUtil.closeChannel(next.getValue().getChannel());
+                // 移除
                 it.remove();
                 log.warn("The broker channel expired, {} {}ms", next.getKey(), BROKER_CHANNEL_EXPIRED_TIME);
+                // 处理channel的关闭，这个方法里会处理其他 hashMap 的移除
                 this.onChannelDestroy(next.getKey(), next.getValue().getChannel());
 
                 removeCount++;

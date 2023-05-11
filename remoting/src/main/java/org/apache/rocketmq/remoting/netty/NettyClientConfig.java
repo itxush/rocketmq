@@ -19,8 +19,12 @@ package org.apache.rocketmq.remoting.netty;
 public class NettyClientConfig {
     /**
      * Worker thread number
+     * 这个其实就是处理netty 那堆自定义handler的线程
      */
     private int clientWorkerThreads = NettySystemConfig.clientWorkerSize;
+    /**
+     * callback线程数，这个用来执行你注册的那些processor
+     */
     private int clientCallbackExecutorThreads = Runtime.getRuntime().availableProcessors();
     private int clientOnewaySemaphoreValue = NettySystemConfig.CLIENT_ONEWAY_SEMAPHORE_VALUE;
     private int clientAsyncSemaphoreValue = NettySystemConfig.CLIENT_ASYNC_SEMAPHORE_VALUE;

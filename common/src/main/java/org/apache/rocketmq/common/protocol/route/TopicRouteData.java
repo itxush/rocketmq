@@ -27,13 +27,16 @@ import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
 public class TopicRouteData extends RemotingSerializable {
     /**
-     * 顺序消息相关配置信息
+     * 顺序消息相关配置信息 来自kvConfig
      */
     private String orderTopicConf;
     /**
      * 该Topic所占的所有队列数据。其中，BrokerName指代具体的 Broker 名称，读写分离架构下通过NameServer选择时，可能仅含 Master 节点或者单节点
      */
     private List<QueueData> queueDatas;
+    /**
+     * topic分布的broker元数据
+     */
     private List<BrokerData> brokerDatas;
     /**
      * 消息过滤服务器地址信息。应用场景为采用类 SQL 的表达式进行消息过滤及订阅时，可以动态路由到不同的消息过滤服务器，以提高消费服务的扩展性和可靠性。
