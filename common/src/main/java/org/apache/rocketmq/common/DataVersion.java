@@ -17,10 +17,13 @@
 package org.apache.rocketmq.common;
 
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.rocketmq.remoting.protocol.RemotingSerializable;
 
 public class DataVersion extends RemotingSerializable {
+    // 时间戳
     private long timestamp = System.currentTimeMillis();
+    // 计数器，可以理解为最近的版本号
     private AtomicLong counter = new AtomicLong(0);
 
     public void assignNewOne(final DataVersion dataVersion) {
@@ -28,6 +31,14 @@ public class DataVersion extends RemotingSerializable {
         this.counter.set(dataVersion.counter.get());
     }
 
+    /**
+     * 从DataVersion#nextVersion方法的调用情况来看，引起这两个值的变化主要有两种：
+     * <p>
+     * broker 上新创建了一个 topic
+     * topic 发生了的变化
+     * <p>
+     * 在这两种情况下，DataVersion#nextVersion方法被调用，从而引起DataVersion的改变。DataVersion改变了，就表明当前broker需要向nameServer注册了
+     */
     public void nextVersion() {
         this.timestamp = System.currentTimeMillis();
         this.counter.incrementAndGet();
@@ -49,6 +60,9 @@ public class DataVersion extends RemotingSerializable {
         this.counter = counter;
     }
 
+    /**
+     * equals 方法，当 timestamp 与 counter 都相等时，则两者相等
+     */
     @Override
     public boolean equals(final Object o) {
         if (this == o)

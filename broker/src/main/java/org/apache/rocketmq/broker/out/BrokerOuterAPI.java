@@ -111,17 +111,16 @@ public class BrokerOuterAPI {
         this.remotingClient.updateNameServerAddressList(lst);
     }
 
-    public List<RegisterBrokerResult> registerBrokerAll(
-            final String clusterName,
-            final String brokerAddr,
-            final String brokerName,
-            final long brokerId,
-            final String haServerAddr,
-            final TopicConfigSerializeWrapper topicConfigWrapper,
-            final List<String> filterServerList,
-            final boolean oneway,
-            final int timeoutMills,
-            final boolean compressed) {
+    public List<RegisterBrokerResult> registerBrokerAll(final String clusterName,
+                                                        final String brokerAddr,
+                                                        final String brokerName,
+                                                        final long brokerId,
+                                                        final String haServerAddr,
+                                                        final TopicConfigSerializeWrapper topicConfigWrapper,
+                                                        final List<String> filterServerList,
+                                                        final boolean oneway,
+                                                        final int timeoutMills,
+                                                        final boolean compressed) {
 
         final List<RegisterBrokerResult> registerBrokerResultList = new CopyOnWriteArrayList<>();
         // 获取nameserver地址列表
@@ -193,7 +192,7 @@ public class BrokerOuterAPI {
             }
             return null;
         }
-        // 异步调用向nameserver发起注册，获取nameserver的返回信息
+        // 向nameserver发起注册，获取nameserver的返回信息
         RemotingCommand response = this.remotingClient.invokeSync(namesrvAddr, request, timeoutMills);
         assert response != null;
         switch (response.getCode()) {
@@ -217,12 +216,11 @@ public class BrokerOuterAPI {
         throw new MQBrokerException(response.getCode(), response.getRemark(), requestHeader == null ? null : requestHeader.getBrokerAddr());
     }
 
-    public void unregisterBrokerAll(
-            final String clusterName,
-            final String brokerAddr,
-            final String brokerName,
-            final long brokerId
-    ) {
+    public void unregisterBrokerAll(final String clusterName,
+                                    final String brokerAddr,
+                                    final String brokerName,
+                                    final long brokerId) {
+        // 发送一条注销消息给nameServer
         List<String> nameServerAddressList = this.remotingClient.getNameServerAddressList();
         if (nameServerAddressList != null) {
             for (String namesrvAddr : nameServerAddressList) {
@@ -236,18 +234,17 @@ public class BrokerOuterAPI {
         }
     }
 
-    public void unregisterBroker(
-            final String namesrvAddr,
-            final String clusterName,
-            final String brokerAddr,
-            final String brokerName,
-            final long brokerId
-    ) throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException, InterruptedException, MQBrokerException {
+    public void unregisterBroker(final String namesrvAddr,
+                                 final String clusterName,
+                                 final String brokerAddr,
+                                 final String brokerName,
+                                 final long brokerId) throws RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException, InterruptedException, MQBrokerException {
         UnRegisterBrokerRequestHeader requestHeader = new UnRegisterBrokerRequestHeader();
         requestHeader.setBrokerAddr(brokerAddr);
         requestHeader.setBrokerId(brokerId);
         requestHeader.setBrokerName(brokerName);
         requestHeader.setClusterName(clusterName);
+        // 发送的注销消息：RequestCode.UNREGISTER_BROKER
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.UNREGISTER_BROKER, requestHeader);
 
         RemotingCommand response = this.remotingClient.invokeSync(namesrvAddr, request, 3000);
@@ -263,17 +260,30 @@ public class BrokerOuterAPI {
         throw new MQBrokerException(response.getCode(), response.getRemark(), brokerAddr);
     }
 
-    public List<Boolean> needRegister(
-            final String clusterName,
-            final String brokerAddr,
-            final String brokerName,
-            final long brokerId,
-            final TopicConfigSerializeWrapper topicConfigWrapper,
-            final int timeoutMills) {
+    /**
+     * 先是遍历所有的nameServer 向每个nameServer都发送一条code为RequestCode.QUERY_DATA_VERSION的参数，参数为当前broker的DataVersion，
+     * 当nameServer收到消息后，就返回nameServer中保存的与当前broker对应的DataVersion，当两者版本不相等时，就表明当前broker发生了变化，需要重新注册
+     *
+     * @param clusterName        broker集群名称
+     * @param brokerAddr         broker地址
+     * @param brokerName         broker名称
+     * @param brokerId           brokerId
+     * @param topicConfigWrapper topic配置
+     * @param timeoutMills       超时时间
+     * @return 是否需要重新注册结果列表
+     */
+    public List<Boolean> needRegister(final String clusterName,
+                                      final String brokerAddr,
+                                      final String brokerName,
+                                      final long brokerId,
+                                      final TopicConfigSerializeWrapper topicConfigWrapper,
+                                      final int timeoutMills) {
         final List<Boolean> changedList = new CopyOnWriteArrayList<>();
+        // 获取所有的 nameServer
         List<String> nameServerAddressList = this.remotingClient.getNameServerAddressList();
         if (nameServerAddressList != null && nameServerAddressList.size() > 0) {
             final CountDownLatch countDownLatch = new CountDownLatch(nameServerAddressList.size());
+            // 遍历所有的nameServer,逐一发送请求
             for (final String namesrvAddr : nameServerAddressList) {
                 brokerOuterExecutor.execute(() -> {
                     try {
@@ -282,8 +292,11 @@ public class BrokerOuterAPI {
                         requestHeader.setBrokerId(brokerId);
                         requestHeader.setBrokerName(brokerName);
                         requestHeader.setClusterName(clusterName);
+                        // 向nameServer发送消息，命令是 RequestCode.QUERY_DATA_VERSION
                         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.QUERY_DATA_VERSION, requestHeader);
+                        // 把当前的 DataVersion 发到 nameServer
                         request.setBody(topicConfigWrapper.getDataVersion().encode());
+                        // 发请求到nameServer
                         RemotingCommand response = remotingClient.invokeSync(namesrvAddr, request, timeoutMills);
                         DataVersion nameServerDataVersion = null;
                         Boolean changed = false;
@@ -294,7 +307,9 @@ public class BrokerOuterAPI {
                                 changed = queryDataVersionResponseHeader.getChanged();
                                 byte[] body = response.getBody();
                                 if (body != null) {
+                                    // 拿到 DataVersion
                                     nameServerDataVersion = DataVersion.decode(body, DataVersion.class);
+                                    // 这里是判断的关键
                                     if (!topicConfigWrapper.getDataVersion().equals(nameServerDataVersion)) {
                                         changed = true;
                                     }

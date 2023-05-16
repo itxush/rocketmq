@@ -146,7 +146,6 @@ public class MappedFileQueue {
         }
     }
 
-
     public boolean load() {
         File dir = new File(this.storePath);
         File[] ls = dir.listFiles();
@@ -275,13 +274,17 @@ public class MappedFileQueue {
 
         return mappedFileLast;
     }
-
+    /**
+     * 将offset以后的MappedFile都清除掉
+     */
     public boolean resetOffset(long offset) {
         MappedFile mappedFileLast = getLastMappedFile();
 
         if (mappedFileLast != null) {
+            // 最后一个MappedFile的【起始偏移量】+ 【写入PageCache的位置】
             long lastOffset = mappedFileLast.getFileFromOffset() +
                     mappedFileLast.getWrotePosition();
+            // 最后的写入位置与offset的差值，如果大于2个MappedFile大小，就不做重置
             long diff = lastOffset - offset;
 
             final int maxDiff = this.mappedFileSize * 2;
@@ -294,12 +297,15 @@ public class MappedFileQueue {
         while (iterator.hasPrevious()) {
             mappedFileLast = iterator.previous();
             if (offset >= mappedFileLast.getFileFromOffset()) {
+                // 定位到offset在第几个MappedFile中
                 int where = (int) (offset % mappedFileLast.getFileSize());
+                // 重置最后一个MappedFile的位置
                 mappedFileLast.setFlushedPosition(where);
                 mappedFileLast.setWrotePosition(where);
                 mappedFileLast.setCommittedPosition(where);
                 break;
             } else {
+                // 如果offset小于当前的MappedFile的起始偏移量，则直接删除MappedFile
                 iterator.remove();
             }
         }
