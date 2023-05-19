@@ -57,9 +57,11 @@ public class MappedFile extends ReferenceResource {
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
      * 如果启用了TransientStorePool，则writeBuffer为从暂时存储池中借用的buffer，
      * 此时存储对象(比如消息等)会先写入该writeBuffer，然后commit到fileChannel，最后对fileChannel进行flush刷盘
-     *
+     * <p>
      * 这个buf包含整个文件大小(commitLog  = 1G(1073741824K))
-     *
+     * <p>
+     * writeBuffer使用的是堆外内存，mappedByteBuffer是直接将文件映射到内存中，两者的使用是互斥的。
+     * 如果启用了临时缓冲池（默认不启用），那么就会使用writeBuffer写commitlog，否则就是mappedBtyeBuffer写commitlog。
      */
     protected ByteBuffer writeBuffer = null;
     // 一个内存ByteBuffer池实现，如果如果启用了TransientStorePool则不为空
@@ -259,6 +261,11 @@ public class MappedFile extends ReferenceResource {
              * RocketMQ提供两种数据落盘的方式:
              * 1. 直接将数据写到mappedByteBuffer, 然后flush;
              * 2. 先写到writeBuffer, 再从writeBuffer提交到fileChannel, 最后flush.
+             * <p>
+             * java.nio.ByteBuffer#slice() 方法的作用是创建一个新的字节缓冲区，与原始缓冲区共享其内容。新缓冲区的容量是原始缓冲区的剩余元素数量，从当前位置开始。
+             * 具体来说，slice() 方法返回一个包含原始缓冲区未读取数据的子序列的新的缓冲区。新的缓冲区与原始缓冲区共享底层数组（即与原始缓冲区指向同一内存地址），
+             * 但是它的界限、位置和标记属性都是属于原始缓冲区的。
+             * 使用slice() 方法，可以方便地对原始缓冲区的片段进行读或写操作，而不会影响到原始缓冲区的状态和内容。
              */
             ByteBuffer byteBuffer = writeBuffer != null ? writeBuffer.slice() : this.mappedByteBuffer.slice();
             /*
@@ -291,16 +298,19 @@ public class MappedFile extends ReferenceResource {
     }
 
     public boolean appendMessage(final byte[] data) {
+        // 获取当前写的位置
         int currentPos = this.wrotePosition.get();
-
+        // 判断在这个MappedFile中能不能 放下
         if ((currentPos + data.length) <= this.fileSize) {
             try {
                 ByteBuffer buf = this.mappedByteBuffer.slice();
+                // 写入消息
                 buf.position(currentPos);
                 buf.put(data);
             } catch (Throwable e) {
                 log.error("Error occurred when append message to mappedFile.", e);
             }
+            // 重置 写入消息
             this.wrotePosition.addAndGet(data.length);
             return true;
         }
@@ -497,7 +507,22 @@ public class MappedFile extends ReferenceResource {
         return null;
     }
 
+    /**
+     * buffer01(position:2, limit:5, capacity:5) [1, 2, 3, 4, 5]
+     *              |
+     *              |
+     *              v
+     * buffer01.slice()
+     *              |
+     *              |
+     *              v
+     * buffer01(position:0, limit:3, capacity:3) [3, 4, 5]
+     *
+     * @param pos
+     * @return
+     */
     public SelectMappedBufferResult selectMappedBuffer(int pos) {
+        // 获取这个 MappedFile 里面的一个read position，其实就是这个MappedFile 的一个可读位置
         int readPosition = getReadPosition();
         if (pos < readPosition && pos >= 0) {
             if (this.hold()) {

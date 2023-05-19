@@ -17,7 +17,7 @@ public class ProducerTest {
         // 启动producer
         producer.start();
         // 发送消息
-        SendResult result = producer.send(new Message(topic, "this is second message".getBytes()));
+        SendResult result = producer.send(new Message(topic, "this is 2 message".getBytes()));
         System.out.println(result.getSendStatus());
         // 关闭producer
         producer.shutdown();

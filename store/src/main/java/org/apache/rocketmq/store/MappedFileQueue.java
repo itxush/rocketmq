@@ -335,7 +335,7 @@ public class MappedFileQueue {
     }
 
     /**
-     * 最大：获取最后一个MappedFile，然后【起始偏移量】+【可读位置】
+     * 获取最后一个MappedFile，然后[起始偏移量]+[可读位置]
      * 获取存储文件的最大偏移量。返回最后一个MappedFile的fileFromOffset
      * 加上MappedFile当前的读指针
      *
@@ -509,8 +509,8 @@ public class MappedFileQueue {
      * @return Mapped file or null (when not found and returnFirstOnNotFound is <code>false</code>).
      * <p>
      * 根据消息偏移量offset查找MappedFile，但是不能直接使用offset%mappedFileSize。这是因为使用了内存映射，
-     * 只要是存在于存储目录下的文件，都需要对应创建内存映射文件，如果不定时将已消费的消息从存储文件中删除，
-     * 会造成极大的内存压力与资源浪费，所以RocketMQ采取定时删除存储文件的策略。也就是说，在存储文件中，
+     * 只要是存在于存储目录下的文件，都需要对应创建内存映射文件
+     * 如果不定时将已消费的消息从存储文件中删除，会造成极大的内存压力与资源浪费，所以RocketMQ采取定时删除存储文件的策略。也就是说，在存储文件中，
      * 第一个文件不一定是00000000000000000000，因为该文件在某一时刻会被删除，所以根据offset定位MappedFile的算法为
      * (int)((offset/this.mappedFileSize)-(mappedFile.getFileFromOffset()/this.MappedFileSize))
      */

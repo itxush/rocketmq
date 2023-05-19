@@ -219,6 +219,7 @@ public abstract class NettyRemotingAbstract {
                                         response.markResponseType();
                                         response.setSerializeTypeCurrentRPC(cmd.getSerializeTypeCurrentRPC());
                                         try {
+                                            // 将响应结果告诉client
                                             ctx.writeAndFlush(response);
                                         } catch (Throwable e) {
                                             log.error("process request over, but response failed", e);
