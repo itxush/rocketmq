@@ -62,6 +62,9 @@ public class CommitLog {
     protected final static int BLANK_MAGIC_CODE = -875286124;
     protected final MappedFileQueue mappedFileQueue;
     protected final DefaultMessageStore defaultMessageStore;
+    /**
+     * 刷盘
+     */
     private final FlushCommitLogService flushCommitLogService;
 
     //If TransientStorePool enabled, we must flush message to FileChannel at fixed periods
@@ -137,6 +140,7 @@ public class CommitLog {
     }
 
     public void start() {
+        // 启动刷盘的线程
         this.flushCommitLogService.start();
 
         flushDiskWatcher.setDaemon(true);
@@ -650,6 +654,8 @@ public class CommitLog {
                 }
                 // 设置延迟队列
                 topic = TopicValidator.RMQ_SYS_SCHEDULE_TOPIC;
+
+                // 延迟级别 与 消息队列编号 做固定映射 QueueId = DelayLevel - 1
                 int queueId = ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel());
 
                 // Backup real topic, queueId
@@ -883,9 +889,14 @@ public class CommitLog {
     public CompletableFuture<PutMessageStatus> submitFlushRequest(AppendMessageResult result, MessageExt messageExt) {
         // Synchronization flush 同步刷盘
         if (FlushDiskType.SYNC_FLUSH == this.defaultMessageStore.getMessageStoreConfig().getFlushDiskType()) {
+            // 获取GroupCommitService
             final GroupCommitService service = (GroupCommitService) this.flushCommitLogService;
+            // 是否等待
             if (messageExt.isWaitStoreMsgOK()) {
-                // 构建GroupCommitRequest同步任务并提交到GroupCommitRequest
+                /*
+                 * 构建GroupCommitRequest同步任务并提交到GroupCommitRequest
+                 * 构建组提交请求，传入本次刷盘后位置的偏移量：写入位置偏移量+写入数据字节数
+                 */
                 GroupCommitRequest request = new GroupCommitRequest(result.getWroteOffset() + result.getWroteBytes(),
                         this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
                 flushDiskWatcher.add(request);
@@ -899,11 +910,15 @@ public class CommitLog {
         }
         // Asynchronous flush 异步刷盘 这个就是靠os
         else {
+            // 如果未使用暂存池
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
+                // 唤醒刷盘线程进行刷盘
                 flushCommitLogService.wakeup();
             } else {
+                // 如果使用暂存池，使用commitLogService，先将数据写入到FILECHANNEL，然后统一进行刷盘
                 commitLogService.wakeup();
             }
+            // 返回结果
             return CompletableFuture.completedFuture(PutMessageStatus.PUT_OK);
         }
     }
@@ -1190,8 +1205,17 @@ public class CommitLog {
     }
 
     public static class GroupCommitRequest {
+        /**
+         * 写入位置偏移量+写入数据字节数，也就是本次刷盘成功后应该对应的flush偏移量
+         */
         private final long nextOffset;
+        /**
+         * 刷盘结果
+         */
         private CompletableFuture<PutMessageStatus> flushOKFuture = new CompletableFuture<>();
+        /**
+         * 刷盘的超时时间，超过超时时间还未刷盘完毕会被认为超时
+         */
         private final long deadLine;
 
         public GroupCommitRequest(long nextOffset, long timeoutMillis) {
@@ -1208,6 +1232,7 @@ public class CommitLog {
         }
 
         public void wakeupCustomer(final PutMessageStatus putMessageStatus) {
+            // todo 在这里调用 结束刷盘，设置刷盘状态
             this.flushOKFuture.complete(putMessageStatus);
         }
 
@@ -1221,8 +1246,8 @@ public class CommitLog {
      * GroupCommit Service
      */
     class GroupCommitService extends FlushCommitLogService {
-        private volatile LinkedList<GroupCommitRequest> requestsWrite = new LinkedList<GroupCommitRequest>();
-        private volatile LinkedList<GroupCommitRequest> requestsRead = new LinkedList<GroupCommitRequest>();
+        private volatile LinkedList<GroupCommitRequest> requestsWrite = new LinkedList<>();
+        private volatile LinkedList<GroupCommitRequest> requestsRead = new LinkedList<>();
         private final PutMessageSpinLock lock = new PutMessageSpinLock();
 
         public synchronized void putRequest(final GroupCommitRequest request) {
@@ -1278,7 +1303,9 @@ public class CommitLog {
 
             while (!this.isStopped()) {
                 try {
+                    // 等待刷盘请求的到来
                     this.waitForRunning(10);
+                    // 处理刷盘
                     this.doCommit();
                 } catch (Exception e) {
                     CommitLog.log.warn(this.getServiceName() + " service has exception. ", e);

@@ -28,8 +28,14 @@ public abstract class ServiceThread implements Runnable {
     private static final long JOIN_TIME = 90 * 1000;
 
     private Thread thread;
+    // CountDownLatch用于线程间的通信
     protected final CountDownLatch2 waitPoint = new CountDownLatch2(1);
+    // 是否通知，初始化为false
     protected volatile AtomicBoolean hasNotified = new AtomicBoolean(false);
+    /**
+     * stopped 声明为volatile 每执行一次业务逻辑，检测一下其运行状态
+     * 可以通过其他线程将Stopped设置为true，从而停止该线程
+     */
     protected volatile boolean stopped = false;
     protected boolean isDaemon = false;
 
@@ -126,20 +132,28 @@ public abstract class ServiceThread implements Runnable {
         }
     }
 
+    /**
+     * 等待运行
+     * @param interval
+     */
     protected void waitForRunning(long interval) {
+        // 判断hasNotified是否为true，并尝试将其更新为false
         if (hasNotified.compareAndSet(true, false)) {
             this.onWaitEnd();
             return;
         }
 
-        //entry to wait
+        // entry to wait
+        // 重置waitPoint的值，也就是值为1
         waitPoint.reset();
 
         try {
+            // 会一直等待waitPoint值降为0
             waitPoint.await(interval, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             log.error("Interrupted", e);
         } finally {
+            // 是否被通知设置为false
             hasNotified.set(false);
             this.onWaitEnd();
         }

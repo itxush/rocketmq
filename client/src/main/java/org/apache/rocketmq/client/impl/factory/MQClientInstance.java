@@ -92,18 +92,31 @@ public class MQClientInstance {
     private final int instanceIndex;
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
+    /**
+     * 生产者表
+     * producer启动时创建一个新的MQClientInstance实例对象，将生产者信息注册到这里。
+     * 生产者实例对象中消费者信息是空
+     */
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<>();
+    /**
+     * 消费者表，consumer启动时创建一个新的MQClientInstance实例对象，将消费者信息注册到这里。
+     * 消费者实例对象中生产者信息是空
+     */
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<>();
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<>();
     private final NettyClientConfig nettyClientConfig;
     private final MQClientAPIImpl mQClientAPIImpl;
     private final MQAdminImpl mQAdminImpl;
+    /**
+     * topic路由信息，producer和consumer都会使用
+     */
     private final ConcurrentMap<String/* Topic */, TopicRouteData> topicRouteTable = new ConcurrentHashMap<>();
     private final Lock lockNamesrv = new ReentrantLock();
     private final Lock lockHeartbeat = new ReentrantLock();
     /**
      * broker的地址信息 主从结构
      * <broker name, <broker id, address>>
+     * producer和consumer都会用到
      */
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
             new ConcurrentHashMap<String, HashMap<Long, String>>();
@@ -135,7 +148,12 @@ public class MQClientInstance {
         this.nettyClientConfig = new NettyClientConfig();
         this.nettyClientConfig.setClientCallbackExecutorThreads(clientConfig.getClientCallbackExecutorThreads());
         this.nettyClientConfig.setUseTLS(clientConfig.isUseTLS());
+        /*
+         * 客户端处理器,比如在集群消费模式下，有新的消费者加入
+         * 则通知消费者客户端重平衡,是给消费者用的(分析生产者时直接忽略它)
+         */
         this.clientRemotingProcessor = new ClientRemotingProcessor(this);
+        // 它的内部会创建netty客户端对象(NettyRemotingClient) 用于和broker通信
         this.mQClientAPIImpl = new MQClientAPIImpl(this.nettyClientConfig, this.clientRemotingProcessor, rpcHook, clientConfig);
 
         if (this.clientConfig.getNamesrvAddr() != null) {
@@ -147,8 +165,10 @@ public class MQClientInstance {
 
         this.mQAdminImpl = new MQAdminImpl(this);
 
+        // 拉取消息的服务，和消费者相关
         this.pullMessageService = new PullMessageService(this);
 
+        // 重平衡服务，和消费者相关
         this.rebalanceService = new RebalanceService(this);
 
         this.defaultMQProducer = new DefaultMQProducer(MixAll.CLIENT_INNER_PRODUCER_GROUP);
@@ -257,10 +277,10 @@ public class MQClientInstance {
                     // 开启任务调度
                     this.startScheduledTask();
                     // Start pull service
-                    // todo 开启 拉取服务
+                    // 开启 拉取服务(重要)
                     this.pullMessageService.start();
                     // Start rebalance service
-                    // todo 开启平衡服务
+                    // 开启平衡服务
                     this.rebalanceService.start();
                     /*
                      * Start push service
@@ -330,7 +350,7 @@ public class MQClientInstance {
             @Override
             public void run() {
                 try {
-                    // TODO: 2023/5/10 持久化consumer offset 可以放在本地文件，也可以推送到 broker [仅对消费者consumer有效]
+                    // TODO: 2023/5/10 持久化consumer offset 可以放在本地文件，也可以推送到 broker [该定时任务仅对消费者consumer有效]
                     MQClientInstance.this.persistAllConsumerOffset();
                 } catch (Exception e) {
                     log.error("ScheduledTask persistAllConsumerOffset exception", e);

@@ -29,6 +29,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.rocketmq.common.ConfigManager;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.ThreadFactoryImpl;
@@ -62,10 +63,10 @@ public class ScheduleMessageService extends ConfigManager {
     private static final long DELAY_FOR_A_SLEEP = 10L;
 
     private final ConcurrentMap<Integer /* level */, Long/* delay timeMillis */> delayLevelTable =
-        new ConcurrentHashMap<Integer, Long>(32);
+            new ConcurrentHashMap<Integer, Long>(32);
 
     private final ConcurrentMap<Integer /* level */, Long/* offset */> offsetTable =
-        new ConcurrentHashMap<Integer, Long>(32);
+            new ConcurrentHashMap<Integer, Long>(32);
     private final DefaultMessageStore defaultMessageStore;
     private final AtomicBoolean started = new AtomicBoolean(false);
     private ScheduledExecutorService deliverExecutorService;
@@ -74,7 +75,7 @@ public class ScheduleMessageService extends ConfigManager {
     private boolean enableAsyncDeliver = false;
     private ScheduledExecutorService handleExecutorService;
     private final Map<Integer /* level */, LinkedBlockingQueue<PutResultProcess>> deliverPendingTable =
-        new ConcurrentHashMap<>(32);
+            new ConcurrentHashMap<>(32);
 
     public ScheduleMessageService(final DefaultMessageStore defaultMessageStore) {
         this.defaultMessageStore = defaultMessageStore;
@@ -88,6 +89,13 @@ public class ScheduleMessageService extends ConfigManager {
         return queueId + 1;
     }
 
+    /**
+     * 根据 延迟级别 计算 消息队列编号
+     * QueueId = DelayLevel - 1
+     *
+     * @param delayLevel 延迟级别
+     * @return 消息队列编号
+     */
     public static int delayLevel2QueueId(final int delayLevel) {
         return delayLevel - 1;
     }
@@ -217,8 +225,8 @@ public class ScheduleMessageService extends ConfigManager {
         try {
             for (int delayLevel : delayLevelTable.keySet()) {
                 ConsumeQueue cq =
-                    ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
-                        delayLevel2QueueId(delayLevel));
+                        ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
+                                delayLevel2QueueId(delayLevel));
                 Long currentDelayOffset = offsetTable.get(delayLevel);
                 if (currentDelayOffset == null || cq == null) {
                     continue;
@@ -229,13 +237,13 @@ public class ScheduleMessageService extends ConfigManager {
                 if (currentDelayOffset < cqMinOffset) {
                     correctDelayOffset = cqMinOffset;
                     log.error("schedule CQ offset invalid. offset={}, cqMinOffset={}, cqMaxOffset={}, queueId={}",
-                        currentDelayOffset, cqMinOffset, cqMaxOffset, cq.getQueueId());
+                            currentDelayOffset, cqMinOffset, cqMaxOffset, cq.getQueueId());
                 }
 
                 if (currentDelayOffset > cqMaxOffset) {
                     correctDelayOffset = cqMaxOffset;
                     log.error("schedule CQ offset invalid. offset={}, cqMinOffset={}, cqMaxOffset={}, queueId={}",
-                        currentDelayOffset, cqMinOffset, cqMaxOffset, cq.getQueueId());
+                            currentDelayOffset, cqMinOffset, cqMaxOffset, cq.getQueueId());
                 }
                 if (correctDelayOffset != currentDelayOffset) {
                     log.error("correct delay offset [ delayLevel {} ] from {} to {}", delayLevel, currentDelayOffset, correctDelayOffset);
@@ -252,14 +260,14 @@ public class ScheduleMessageService extends ConfigManager {
     @Override
     public String configFilePath() {
         return StorePathConfigHelper.getDelayOffsetStorePath(this.defaultMessageStore.getMessageStoreConfig()
-            .getStorePathRootDir());
+                .getStorePathRootDir());
     }
 
     @Override
     public void decode(String jsonString) {
         if (jsonString != null) {
             DelayOffsetSerializeWrapper delayOffsetSerializeWrapper =
-                DelayOffsetSerializeWrapper.fromJson(jsonString, DelayOffsetSerializeWrapper.class);
+                    DelayOffsetSerializeWrapper.fromJson(jsonString, DelayOffsetSerializeWrapper.class);
             if (delayOffsetSerializeWrapper != null) {
                 this.offsetTable.putAll(delayOffsetSerializeWrapper.getOffsetTable());
             }
@@ -273,6 +281,11 @@ public class ScheduleMessageService extends ConfigManager {
         return delayOffsetSerializeWrapper.toJson(prettyFormat);
     }
 
+    /**
+     * 解析延迟级别
+     *
+     * @return 是否解析成功
+     */
     public boolean parseDelayLevel() {
         HashMap<String, Long> timeUnitTable = new HashMap<String, Long>();
         timeUnitTable.put("s", 1000L);
@@ -316,7 +329,7 @@ public class ScheduleMessageService extends ConfigManager {
 
         TopicFilterType topicFilterType = MessageExt.parseTopicFilterType(msgInner.getSysFlag());
         long tagsCodeValue =
-            MessageExtBrokerInner.tagsString2tagsCode(topicFilterType, msgInner.getTags());
+                MessageExtBrokerInner.tagsString2tagsCode(topicFilterType, msgInner.getTags());
         msgInner.setTagsCode(tagsCodeValue);
         msgInner.setPropertiesString(MessageDecoder.messageProperties2String(msgExt.getProperties()));
 
@@ -377,8 +390,8 @@ public class ScheduleMessageService extends ConfigManager {
 
         public void executeOnTimeup() {
             ConsumeQueue cq =
-                ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
-                    delayLevel2QueueId(delayLevel));
+                    ScheduleMessageService.this.defaultMessageStore.findConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
+                            delayLevel2QueueId(delayLevel));
 
             if (cq == null) {
                 this.scheduleNextTimerTask(this.offset, DELAY_FOR_A_WHILE);
@@ -390,10 +403,10 @@ public class ScheduleMessageService extends ConfigManager {
                 long resetOffset;
                 if ((resetOffset = cq.getMinOffsetInQueue()) > this.offset) {
                     log.error("schedule CQ offset invalid. offset={}, cqMinOffset={}, queueId={}",
-                        this.offset, resetOffset, cq.getQueueId());
+                            this.offset, resetOffset, cq.getQueueId());
                 } else if ((resetOffset = cq.getMaxOffsetInQueue()) < this.offset) {
                     log.error("schedule CQ offset invalid. offset={}, cqMaxOffset={}, queueId={}",
-                        this.offset, resetOffset, cq.getQueueId());
+                            this.offset, resetOffset, cq.getQueueId());
                 } else {
                     resetOffset = this.offset;
                 }
@@ -417,7 +430,7 @@ public class ScheduleMessageService extends ConfigManager {
                         } else {
                             //can't find ext content.So re compute tags code.
                             log.error("[BUG] can't find consume queue extend file content!addr={}, offsetPy={}, sizePy={}",
-                                tagsCode, offsetPy, sizePy);
+                                    tagsCode, offsetPy, sizePy);
                             long msgStoreTime = defaultMessageStore.getCommitLog().pickupStoreTimestamp(offsetPy, sizePy);
                             tagsCode = computeDeliverTimestamp(delayLevel, msgStoreTime);
                         }
@@ -441,7 +454,7 @@ public class ScheduleMessageService extends ConfigManager {
                     MessageExtBrokerInner msgInner = ScheduleMessageService.this.messageTimeup(msgExt);
                     if (TopicValidator.RMQ_SYS_TRANS_HALF_TOPIC.equals(msgInner.getTopic())) {
                         log.error("[BUG] the real topic of schedule msg is {}, discard the msg. msg={}",
-                            msgInner.getTopic(), msgInner);
+                                msgInner.getTopic(), msgInner);
                         continue;
                     }
 
@@ -470,11 +483,11 @@ public class ScheduleMessageService extends ConfigManager {
 
         public void scheduleNextTimerTask(long offset, long delay) {
             ScheduleMessageService.this.deliverExecutorService.schedule(new DeliverDelayedMessageTimerTask(
-                this.delayLevel, offset), delay, TimeUnit.MILLISECONDS);
+                    this.delayLevel, offset), delay, TimeUnit.MILLISECONDS);
         }
 
         private boolean syncDeliver(MessageExtBrokerInner msgInner, String msgId, long offset, long offsetPy,
-            int sizePy) {
+                                    int sizePy) {
             PutResultProcess resultProcess = deliverMessage(msgInner, msgId, offset, offsetPy, sizePy, false);
             PutMessageResult result = resultProcess.get();
             boolean sendStatus = result != null && result.getPutMessageStatus() == PutMessageStatus.PUT_OK;
@@ -485,16 +498,16 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         private boolean asyncDeliver(MessageExtBrokerInner msgInner, String msgId, long offset, long offsetPy,
-            int sizePy) {
+                                     int sizePy) {
             Queue<PutResultProcess> processesQueue = ScheduleMessageService.this.deliverPendingTable.get(this.delayLevel);
 
             //Flow Control
             int currentPendingNum = processesQueue.size();
             int maxPendingLimit = ScheduleMessageService.this.defaultMessageStore.getMessageStoreConfig()
-                .getScheduleAsyncDeliverMaxPendingLimit();
+                    .getScheduleAsyncDeliverMaxPendingLimit();
             if (currentPendingNum > maxPendingLimit) {
                 log.warn("Asynchronous deliver triggers flow control, " +
-                    "currentPendingNum={}, maxPendingLimit={}", currentPendingNum, maxPendingLimit);
+                        "currentPendingNum={}, maxPendingLimit={}", currentPendingNum, maxPendingLimit);
                 return false;
             }
 
@@ -511,19 +524,19 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         private PutResultProcess deliverMessage(MessageExtBrokerInner msgInner, String msgId, long offset,
-            long offsetPy, int sizePy, boolean autoResend) {
+                                                long offsetPy, int sizePy, boolean autoResend) {
             CompletableFuture<PutMessageResult> future =
-                ScheduleMessageService.this.writeMessageStore.asyncPutMessage(msgInner);
+                    ScheduleMessageService.this.writeMessageStore.asyncPutMessage(msgInner);
             return new PutResultProcess()
-                .setTopic(msgInner.getTopic())
-                .setDelayLevel(this.delayLevel)
-                .setOffset(offset)
-                .setPhysicOffset(offsetPy)
-                .setPhysicSize(sizePy)
-                .setMsgId(msgId)
-                .setAutoResend(autoResend)
-                .setFuture(future)
-                .thenProcess();
+                    .setTopic(msgInner.getTopic())
+                    .setDelayLevel(this.delayLevel)
+                    .setOffset(offset)
+                    .setPhysicOffset(offsetPy)
+                    .setPhysicSize(sizePy)
+                    .setMsgId(msgId)
+                    .setAutoResend(autoResend)
+                    .setFuture(future)
+                    .thenProcess();
         }
     }
 
@@ -537,7 +550,7 @@ public class ScheduleMessageService extends ConfigManager {
         @Override
         public void run() {
             LinkedBlockingQueue<PutResultProcess> pendingQueue =
-                ScheduleMessageService.this.deliverPendingTable.get(this.delayLevel);
+                    ScheduleMessageService.this.deliverPendingTable.get(this.delayLevel);
 
             PutResultProcess putResultProcess;
             while ((putResultProcess = pendingQueue.peek()) != null) {
@@ -570,7 +583,7 @@ public class ScheduleMessageService extends ConfigManager {
 
             if (isStarted()) {
                 ScheduleMessageService.this.handleExecutorService
-                    .schedule(new HandlePutResultTask(this.delayLevel), DELAY_FOR_A_SLEEP, TimeUnit.MILLISECONDS);
+                        .schedule(new HandlePutResultTask(this.delayLevel), DELAY_FOR_A_SLEEP, TimeUnit.MILLISECONDS);
             }
         }
     }
@@ -675,7 +688,7 @@ public class ScheduleMessageService extends ConfigManager {
 
             this.future.exceptionally(e -> {
                 log.error("ScheduleMessageService put message exceptionally, info: {}",
-                    PutResultProcess.this.toString(), e);
+                        PutResultProcess.this.toString(), e);
 
                 onException();
                 return null;
@@ -758,29 +771,29 @@ public class ScheduleMessageService extends ConfigManager {
 
         public boolean need2Blocked() {
             int maxResendNum2Blocked = ScheduleMessageService.this.defaultMessageStore.getMessageStoreConfig()
-                .getScheduleAsyncDeliverMaxResendNum2Blocked();
+                    .getScheduleAsyncDeliverMaxResendNum2Blocked();
             return this.resendCount > maxResendNum2Blocked;
         }
 
         public boolean need2Skip() {
             int maxResendNum2Blocked = ScheduleMessageService.this.defaultMessageStore.getMessageStoreConfig()
-                .getScheduleAsyncDeliverMaxResendNum2Blocked();
+                    .getScheduleAsyncDeliverMaxResendNum2Blocked();
             return this.resendCount > maxResendNum2Blocked * 2;
         }
 
         @Override
         public String toString() {
             return "PutResultProcess{" +
-                "topic='" + topic + '\'' +
-                ", offset=" + offset +
-                ", physicOffset=" + physicOffset +
-                ", physicSize=" + physicSize +
-                ", delayLevel=" + delayLevel +
-                ", msgId='" + msgId + '\'' +
-                ", autoResend=" + autoResend +
-                ", resendCount=" + resendCount +
-                ", status=" + status +
-                '}';
+                    "topic='" + topic + '\'' +
+                    ", offset=" + offset +
+                    ", physicOffset=" + physicOffset +
+                    ", physicSize=" + physicSize +
+                    ", delayLevel=" + delayLevel +
+                    ", msgId='" + msgId + '\'' +
+                    ", autoResend=" + autoResend +
+                    ", resendCount=" + resendCount +
+                    ", status=" + status +
+                    '}';
         }
     }
 
