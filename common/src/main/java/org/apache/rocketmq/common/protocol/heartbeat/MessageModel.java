@@ -26,10 +26,14 @@ package org.apache.rocketmq.common.protocol.heartbeat;
 public enum MessageModel {
     /**
      * broadcast
+     * <p>
+     * 消息消费进度存储在消费端
      */
     BROADCASTING("BROADCASTING"),
     /**
      * clustering
+     * <p>
+     * 消息消费进度存储在Broker上
      */
     CLUSTERING("CLUSTERING");
 

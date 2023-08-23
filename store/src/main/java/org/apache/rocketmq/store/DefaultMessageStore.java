@@ -588,15 +588,16 @@ public class DefaultMessageStore implements MessageStore {
         long beginTime = this.getSystemClock().now();
 
         GetMessageStatus status;
+        // 下一次消费的起始偏移量
         long nextBeginOffset;
         long minOffset = 0;
         long maxOffset = 0;
 
-        // lazy init when find msg.
+        // lazy init when find msg. 创建保存消息的容器
         GetMessageResult getResult = null;
-
+        // commmitlog的最大物理偏移量
         final long maxOffsetPy = this.commitLog.getMaxOffset();
-        // 根据topic与queueId一个ConsumeQueue，consumeQueue记录的是消息在commitLog的位置
+        // 根据topic与queueId获取ConsumeQueue，consumeQueue 记录的是消息在commitLog的位置
         ConsumeQueue consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
             minOffset = consumeQueue.getMinOffsetInQueue();
@@ -615,7 +616,10 @@ public class DefaultMessageStore implements MessageStore {
                 status = GetMessageStatus.OFFSET_OVERFLOW_BADLY;
                 nextBeginOffset = nextOffsetCorrection(offset, maxOffset);
             } else {
-                // 从 consumerQueue 文件中获取消息
+                /*
+                 * 从 consumequeue 中读取索引数据
+                 * 这个和消息分发 ReputMessageService 从 commitlog 中读取消息是一样的
+                 */
                 SelectMappedBufferResult bufferConsumeQueue = consumeQueue.getIndexBuffer(offset);
                 if (bufferConsumeQueue != null) {
                     try {
@@ -625,17 +629,20 @@ public class DefaultMessageStore implements MessageStore {
                         long maxPhyOffsetPulling = 0;
 
                         int i = 0;
+                        // pullBatchSize(32) 好像并没有用, 只有当 pullBatchSize > 800 时才有用?
                         final int maxFilterMessageCount = Math.max(16000, maxMsgNums * ConsumeQueue.CQ_STORE_UNIT_SIZE);
                         final boolean diskFallRecorded = this.messageStoreConfig.isDiskFallRecorded();
 
                         getResult = new GetMessageResult(maxMsgNums);
 
                         ConsumeQueueExt.CqExtUnit cqExtUnit = new ConsumeQueueExt.CqExtUnit();
+                        // bufferConsumeQueue.getSize()  就是 consumequeue 中的消息索引单元的总size(size/20 = 索引个数), 每20个字节往前推
                         for (; i < bufferConsumeQueue.getSize() && i < maxFilterMessageCount; i += ConsumeQueue.CQ_STORE_UNIT_SIZE) {
+                            // 一个索引单元包含三个元素：消息偏移量,消息大小,消息tag的hashcode
                             long offsetPy = bufferConsumeQueue.getByteBuffer().getLong();
                             int sizePy = bufferConsumeQueue.getByteBuffer().getInt();
                             long tagsCode = bufferConsumeQueue.getByteBuffer().getLong();
-
+                            // offsetPy + sizePy = 确定一条消息
                             maxPhyOffsetPulling = offsetPy;
 
                             if (nextPhyFileStartOffset != Long.MIN_VALUE) {
@@ -644,7 +651,7 @@ public class DefaultMessageStore implements MessageStore {
                             }
 
                             boolean isInDisk = checkInDiskByCommitOffset(offsetPy, maxOffsetPy);
-
+                            // pullBatchSize在这里会工作，当超过默认的32条后，就会跳出循环
                             if (this.isTheBatchFull(sizePy, maxMsgNums, getResult.getBufferTotalSize(), getResult.getMessageCount(),
                                     isInDisk)) {
                                 break;
@@ -671,7 +678,7 @@ public class DefaultMessageStore implements MessageStore {
 
                                 continue;
                             }
-                            // 从 commitLong 获取消息
+                            // 从commitlog 读取消息,一次读取一条消息
                             SelectMappedBufferResult selectResult = this.commitLog.getMessage(offsetPy, sizePy);
                             if (null == selectResult) {
                                 if (getResult.getBufferTotalSize() == 0) {
@@ -693,6 +700,7 @@ public class DefaultMessageStore implements MessageStore {
                             }
 
                             this.storeStatsService.getGetMessageTransferedMsgCount().add(1);
+                            // 将读到的消息放入容器中，然后继续循环
                             getResult.addMessage(selectResult);
                             status = GetMessageStatus.FOUND;
                             nextPhyFileStartOffset = Long.MIN_VALUE;
@@ -702,7 +710,10 @@ public class DefaultMessageStore implements MessageStore {
                             long fallBehind = maxOffsetPy - maxPhyOffsetPulling;
                             brokerStatsManager.recordDiskFallBehindSize(group, topic, queueId, fallBehind);
                         }
-
+                        /*
+                         * 下一次的 queue offset
+                         * 假如第一次读取，并且只有一条，那么 nextBeginOffset = 0 + 20 / 20 = 1;
+                         */
                         nextBeginOffset = offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE);
 
                         long diff = maxOffsetPy - maxPhyOffsetPulling;
@@ -738,6 +749,10 @@ public class DefaultMessageStore implements MessageStore {
             getResult = new GetMessageResult(0);
         }
 
+        /*
+         * 设置 nextBeginOffset ，消费者拿到 nextBeginOffset 后会设置到 nextOffset
+         * 然后消费者下次传过来，他就是这个方法的参数的  offset
+         */
         getResult.setStatus(status);
         getResult.setNextBeginOffset(nextBeginOffset);
         getResult.setMaxOffset(maxOffset);
@@ -1230,10 +1245,9 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
-     * 根据消息主题与队列ID，先获取对应的ConsumeQueue文件
+     * 根据消息主题与队列ID，先获取对应的ConsumeQueue
      * <p>
      * 因为每一个消息主题对应一个ConsumeQueue目录，主题下每一个消息队列对应一个文件夹
-     * 所以取出该文件夹最后的ConsumeQueue文件即可
      */
     public ConsumeQueue findConsumeQueue(String topic, int queueId) {
         ConcurrentMap<Integer, ConsumeQueue> map = consumeQueueTable.get(topic);

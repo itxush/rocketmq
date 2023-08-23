@@ -152,6 +152,7 @@ public class RebalancePushImpl extends RebalanceImpl {
     @Override
     public long computePullFromWhereWithException(MessageQueue mq) throws MQClientException {
         long result = -1;
+        // 获取第一次消费时指定消费策略
         final ConsumeFromWhere consumeFromWhere = this.defaultMQPushConsumerImpl.getDefaultMQPushConsumer().getConsumeFromWhere();
         final OffsetStore offsetStore = this.defaultMQPushConsumerImpl.getOffsetStore();
         switch (consumeFromWhere) {

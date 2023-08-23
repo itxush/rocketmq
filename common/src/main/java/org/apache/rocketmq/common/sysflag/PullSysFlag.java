@@ -16,6 +16,9 @@
  */
 package org.apache.rocketmq.common.sysflag;
 
+/**
+ * 用来管理 PullRequest 的系统标志位的
+ */
 public class PullSysFlag {
     private final static int FLAG_COMMIT_OFFSET = 0x1;
     private final static int FLAG_SUSPEND = 0x1 << 1;
@@ -23,8 +26,26 @@ public class PullSysFlag {
     private final static int FLAG_CLASS_FILTER = 0x1 << 3;
     private final static int FLAG_LITE_PULL_MESSAGE = 0x1 << 4;
 
-    public static int buildSysFlag(final boolean commitOffset, final boolean suspend,
-        final boolean subscription, final boolean classFilter) {
+    /**
+     * 构建系统标志位的
+     * <p>
+     * 方法首先定义了一个 int 类型的变量 flag，并将其初始化为 0。然后，根据传入的参数，将 flag 的值进行相应的修改。
+     * 具体来说
+     * 如果 commitOffset 参数为 true，则将 FLAG_COMMIT_OFFSET(1)的值加入到 flag 中；
+     * 如果 suspend 参数为 true，则将 FLAG_SUSPEND(1 << 1)的值加入到 flag 中；
+     * 如果 subscription 参数为 true，则将 FLAG_SUBSCRIPTION(1 << 2)的值加入到 flag 中；
+     * 如果 classFilter 参数为 true，则将 FLAG_CLASS_FILTER(1 << 3)的值加入到 flag 中。
+     *
+     * @param commitOffset 是否需要提交偏移量
+     * @param suspend      是否需要暂停
+     * @param subscription 是否需要订阅
+     * @param classFilter  是否需要使用类过滤器
+     * @return PullRequest的系统标志位
+     */
+    public static int buildSysFlag(final boolean commitOffset,
+                                   final boolean suspend,
+                                   final boolean subscription,
+                                   final boolean classFilter) {
         int flag = 0;
 
         if (commitOffset) {
@@ -47,7 +68,7 @@ public class PullSysFlag {
     }
 
     public static int buildSysFlag(final boolean commitOffset, final boolean suspend,
-        final boolean subscription, final boolean classFilter, final boolean litePull) {
+                                   final boolean subscription, final boolean classFilter, final boolean litePull) {
         int flag = buildSysFlag(commitOffset, suspend, subscription, classFilter);
 
         if (litePull) {

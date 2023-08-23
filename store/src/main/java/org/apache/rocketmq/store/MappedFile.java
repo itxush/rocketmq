@@ -595,7 +595,7 @@ public class MappedFile extends ReferenceResource {
     }
 
     /**
-     * @return The max position which have valid data
+     * @return The max position which have valid data 具有有效数据的最大位置
      */
     public int getReadPosition() {
         return this.writeBuffer == null ? this.wrotePosition.get() : this.committedPosition.get();

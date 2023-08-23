@@ -120,8 +120,7 @@ public class MQClientInstance {
      */
     private final ConcurrentMap<String/* Broker Name */, HashMap<Long/* brokerId */, String/* address */>> brokerAddrTable =
             new ConcurrentHashMap<String, HashMap<Long, String>>();
-    private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable =
-            new ConcurrentHashMap<String, HashMap<String, Integer>>();
+    private final ConcurrentMap<String/* Broker Name */, HashMap<String/* address */, Integer>> brokerVersionTable = new ConcurrentHashMap<>();
     private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
@@ -1048,11 +1047,9 @@ public class MQClientInstance {
         return null;
     }
 
-    public FindBrokerResult findBrokerAddressInSubscribe(
-            final String brokerName,
-            final long brokerId,
-            final boolean onlyThisBroker
-    ) {
+    public FindBrokerResult findBrokerAddressInSubscribe(final String brokerName,
+                                                         final long brokerId,
+                                                         final boolean onlyThisBroker) {
         String brokerAddr = null;
         boolean slave = false;
         boolean found = false;

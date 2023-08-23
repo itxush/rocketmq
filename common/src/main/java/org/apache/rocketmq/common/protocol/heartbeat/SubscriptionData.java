@@ -14,6 +14,9 @@ public class SubscriptionData implements Comparable<SubscriptionData> {
     private boolean classFilterMode = false;
     private String topic;
     private String subString;
+    /**
+     * 订阅的标签集合，仅在expressionType为TAG时有意义
+     */
     private Set<String> tagsSet = new HashSet<>();
     private Set<Integer> codeSet = new HashSet<>();
     private long subVersion = System.currentTimeMillis();

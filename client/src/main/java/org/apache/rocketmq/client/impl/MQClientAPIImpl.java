@@ -727,13 +727,12 @@ public class MQClientAPIImpl {
         return sendResult;
     }
 
-    public PullResult pullMessage(
-            final String addr,
-            final PullMessageRequestHeader requestHeader,
-            final long timeoutMillis,
-            final CommunicationMode communicationMode,
-            final PullCallback pullCallback
-    ) throws RemotingException, MQBrokerException, InterruptedException {
+    public PullResult pullMessage(final String addr,
+                                  final PullMessageRequestHeader requestHeader,
+                                  final long timeoutMillis,
+                                  final CommunicationMode communicationMode,
+                                  final PullCallback pullCallback) throws RemotingException, MQBrokerException, InterruptedException {
+        // 构建拉取消息的netty指令：PULL_MESSAGE2e
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.PULL_MESSAGE, requestHeader);
 
         switch (communicationMode) {
@@ -741,6 +740,7 @@ public class MQClientAPIImpl {
                 assert false;
                 return null;
             case ASYNC:
+                // 异步拉取，将拉取消息的结果交给 PullCallback 处理
                 this.pullMessageAsync(addr, request, timeoutMillis, pullCallback);
                 return null;
             case SYNC:
@@ -753,12 +753,10 @@ public class MQClientAPIImpl {
         return null;
     }
 
-    private void pullMessageAsync(
-            final String addr,
-            final RemotingCommand request,
-            final long timeoutMillis,
-            final PullCallback pullCallback
-    ) throws RemotingException, InterruptedException {
+    private void pullMessageAsync(final String addr,
+                                  final RemotingCommand request,
+                                  final long timeoutMillis,
+                                  final PullCallback pullCallback) throws RemotingException, InterruptedException {
         this.remotingClient.invokeAsync(addr, request, timeoutMillis, new InvokeCallback() {
             @Override
             public void operationComplete(ResponseFuture responseFuture) {
@@ -977,11 +975,9 @@ public class MQClientAPIImpl {
         throw new MQBrokerException(response.getCode(), response.getRemark(), addr);
     }
 
-    public long queryConsumerOffset(
-            final String addr,
-            final QueryConsumerOffsetRequestHeader requestHeader,
-            final long timeoutMillis
-    ) throws RemotingException, MQBrokerException, InterruptedException {
+    public long queryConsumerOffset(final String addr,
+                                    final QueryConsumerOffsetRequestHeader requestHeader,
+                                    final long timeoutMillis) throws RemotingException, MQBrokerException, InterruptedException {
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.QUERY_CONSUMER_OFFSET, requestHeader);
 
         RemotingCommand response = this.remotingClient.invokeSync(MixAll.brokerVIPChannel(this.clientConfig.isVipChannelEnabled(), addr),

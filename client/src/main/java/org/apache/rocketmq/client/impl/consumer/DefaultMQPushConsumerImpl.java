@@ -111,6 +111,16 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
     private MQClientInstance mQClientFactory;
     private PullAPIWrapper pullAPIWrapper;
     private volatile boolean pause = false;
+    /**
+     * consumeOrderly字段表示消费者是否按照消息的顺序进行消费。
+     * 如果该字段为true，则消费者会按照消息的顺序依次消费消息；
+     * 如果该字段为false，则消费者可以并行消费消息。
+     * <p>
+     * 当consumeOrderly为true时，消息消费的顺序是由消息队列的顺序决定的。即同一个消息队列中的消息会按照发送顺序依次被消费。
+     * 如果有多个消息队列，则消费者会依次从每个消息队列中取出一条消息进行消费，直到所有消息队列中的消息都被消费完毕。
+     * 需要注意的是，如果消费者在消费消息时发生异常，RocketMQ会将该消息重新投递给消费者，直到消费成功为止。
+     * 因此，即使consumeOrderly为true，也不能保证消息的顺序完全一致。
+     */
     private boolean consumeOrderly = false;
     private MessageListener messageListenerInner;
     private OffsetStore offsetStore;
@@ -274,7 +284,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 }
                 return;
             }
-        } else {
+        } else { // 顺序消费
             if (processQueue.isLocked()) {
                 if (!pullRequest.isPreviouslyLocked()) {
                     long offset = -1L;
@@ -443,17 +453,17 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         );
         try {
             // 拉取消息
-            this.pullAPIWrapper.pullKernelImpl(pullRequest.getMessageQueue(),
+            this.pullAPIWrapper.pullKernelImpl(pullRequest.getMessageQueue(),   // 指定去哪个queue拉取消息
                     subExpression,
                     subscriptionData.getExpressionType(),
                     subscriptionData.getSubVersion(),
-                    pullRequest.getNextOffset(),
-                    this.defaultMQPushConsumer.getPullBatchSize(),
+                    pullRequest.getNextOffset(),                                // 这个非常重要的，第一次拉取它的值是 0
+                    this.defaultMQPushConsumer.getPullBatchSize(),              // 这个参数值默认是32
                     sysFlag,
                     commitOffsetValue,
-                    BROKER_SUSPEND_MAX_TIME_MILLIS,
+                    BROKER_SUSPEND_MAX_TIME_MILLIS,                             // 当consumer拉取消息但broker没有时，此时broker会将请求挂起，默认是15s
                     CONSUMER_TIMEOUT_MILLIS_WHEN_SUSPEND,
-                    CommunicationMode.ASYNC,
+                    CommunicationMode.ASYNC,                                    // 异步
                     pullCallback);
         } catch (Exception e) {
             log.error("pullKernelImpl exception", e);

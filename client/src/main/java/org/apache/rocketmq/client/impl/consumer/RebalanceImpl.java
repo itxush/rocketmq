@@ -292,7 +292,7 @@ public abstract class RebalanceImpl {
                     Collections.sort(cidAll);
                     // 默认是平均分配策略
                     AllocateMessageQueueStrategy strategy = this.allocateMessageQueueStrategy;
-
+                    // 当前客户端分配到的topic下面的队列集合
                     List<MessageQueue> allocateResult;
                     try {
                         // 分配算法
@@ -310,7 +310,7 @@ public abstract class RebalanceImpl {
                     if (allocateResult != null) {
                         allocateResultSet.addAll(allocateResult);
                     }
-                    // todo 对比消息队列是否发生变化 更新负载均衡信息，传入参数是 allocateResultSet，即当前consumer分配到的队列
+                    // 对比消息队列是否发生变化 更新负载均衡信息，传入参数是 allocateResultSet，即当前consumer分配到的队列
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
                     if (changed) {
                         log.info(
@@ -346,15 +346,11 @@ public abstract class RebalanceImpl {
      * 对比消息队列是否发生变化，主要思路是遍历当前负载队列集合，如果队列不在新分配队列的集合中，需要将该队列停止消费并保存消费进度
      * 遍历已分配的队列，如果队列不在队列负载表中(processQueueTable) 则需要创建该队列拉取任务PullRequest
      * 然后添加到PullMessageService线程的pullRequestQueue中, PullMessageService才会继续拉取任务
-     * <p>
-     * 假如我有两个消费者A,B;并且是集群消费，然后队列数是4个，按照平均分配策略，那么A分配到的队列是2个(queueid=0,1)，而B也分配2个(queueid=2,3);
-     * 集群模式下，一个队列只能被同一个消费者组下的一个消费者去消费。
-     * 现在是只有一个消费者A，队列数是4个，所以当前消费者A根据分配策略会分配到4个queue,然后遍历属于消费者A的4个queue,为每个queue创建一个PullRequest,然后放入集合中。
      *
      * @param topic   主题
      * @param mqSet   本次计算得知本消费者需要消费的队列
      * @param isOrder 顺序消息
-     * @return 本消费者需要消费的队列是否发生变化
+     * @return if true 本消费者需要消费的队列发生变化
      */
     private boolean updateProcessQueueTableInRebalance(final String topic, final Set<MessageQueue> mqSet, final boolean isOrder) {
         boolean changed = false;
@@ -415,13 +411,13 @@ public abstract class RebalanceImpl {
                     log.warn("doRebalance, {}, add a new mq failed, {}, because lock failed", consumerGroup, mq);
                     continue;
                 }
-
+                // 从内存中移除该消息队列的消费进度, 防止这个队列曾经在这个消费者消费过留下了记录
                 this.removeDirtyOffset(mq);
                 ProcessQueue pq = new ProcessQueue();
                 // 该client对这个队列进行锁定
                 pq.setLocked(true);
 
-                long nextOffset = -1L;
+                long nextOffset;
                 try {
                     nextOffset = this.computePullFromWhereWithException(mq);
                 } catch (Exception e) {
@@ -481,6 +477,15 @@ public abstract class RebalanceImpl {
     @Deprecated
     public abstract long computePullFromWhere(final MessageQueue mq);
 
+    /**
+     * 该方法会根据消费者当前的消费进度和消费模式集群消费或广播消费，计算出下一次拉取消息的起始位置。如果消费者当前没有消费进度，则会根据消费模式和消费者实例 ID 来计算起始位置。
+     * <p>
+     * 在计算起始位置时，如果消费者当前的消费进度已经超过了消息队列的最大偏移量，则会抛出异常，表示消费者已经消费完了该消息队列中的所有消息。
+     *
+     * @param mq
+     * @return
+     * @throws MQClientException
+     */
     public abstract long computePullFromWhereWithException(final MessageQueue mq) throws MQClientException;
 
     public abstract void dispatchPullRequest(final List<PullRequest> pullRequestList);
