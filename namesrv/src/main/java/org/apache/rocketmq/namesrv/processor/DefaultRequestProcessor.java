@@ -99,12 +99,16 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 return queryBrokerTopicConfig(ctx, request);
             // 如果是RequestCode.REGISTER_BROKER，进行broker注册
             case RequestCode.REGISTER_BROKER:
+                // 获取版本
                 Version brokerVersion = MQVersion.value2Version(request.getVersion());
+                // 做版本兼容
+                // 大于等于V3_0_11
                 if (brokerVersion.ordinal() >= MQVersion.Version.V3_0_11.ordinal()) {
                     return this.registerBrokerWithFilterServer(ctx, request);
                 } else {
                     return this.registerBroker(ctx, request);
                 }
+            // 注销broker
             case RequestCode.UNREGISTER_BROKER:
                 return this.unregisterBroker(ctx, request);
             // 根据topic获取路由信息

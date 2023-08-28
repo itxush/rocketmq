@@ -39,7 +39,10 @@ import org.apache.rocketmq.remoting.netty.NettyServerConfig;
 import org.apache.rocketmq.remoting.netty.TlsSystemConfig;
 import org.apache.rocketmq.srvutil.FileWatchService;
 
-
+/**
+ * `NamesrvController`类是Name Server的控制器，负责启动和管理Name Server的各个组件
+ * 包括Name Server的核心服务、网络通信、存储等。它提供了一系列方法和功能，用于处理和管理Name Server的运行状态、元数据信息的更新和查询等操作。
+ */
 public class NamesrvController {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 

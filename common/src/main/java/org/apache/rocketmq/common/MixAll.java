@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.rocketmq.common.annotation.ImportantField;
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.common.help.FAQUrl;
@@ -237,7 +238,7 @@ public class MixAll {
     }
 
     public static void printObjectProperties(final InternalLogger logger, final Object object,
-        final boolean onlyImportantField) {
+                                             final boolean onlyImportantField) {
         Field[] fields = object.getClass().getDeclaredFields();
         for (Field field : fields) {
             if (!Modifier.isStatic(field.getModifiers())) {
@@ -319,6 +320,16 @@ public class MixAll {
         return properties;
     }
 
+    /**
+     * 1. 先获取到object中的所有setXxx(...)方法
+     * 2. 得到setXxx(...)中的Xxx
+     * 3. 首字母小写得到xxx
+     * 4. 从properties获取xxx属性对应的值，并根据setXxx(...)方法的参数类型进行转换
+     * 5. 反射调用setXxx(...)方法进行赋值
+     *
+     * @param p      外部配置文件
+     * @param object 代码内部配置文件
+     */
     public static void properties2Object(final Properties p, final Object object) {
         Method[] methods = object.getClass().getMethods();
         for (Method method : methods) {
